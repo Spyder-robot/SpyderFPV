@@ -6,5 +6,5 @@ echo put spyder.py>> ftpcmd.dat
 echo quit>> ftpcmd.dat 			
 ftp -n -s:ftpcmd.dat 192.168.0.114			
 del ftpcmd.dat 	
-pause		
+
  		

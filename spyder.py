@@ -1,11 +1,12 @@
 import RPi.GPIO as GPIO
+from threading import Thread
+import socket
 
 
 class Globals:
 
-    def __init__(self):
-        self.encoder = 0
-        self.button = 0
+    encoder = 0
+    button = 0
 
 
 class Encoder:
@@ -48,3 +49,40 @@ class Encoder:
             self.globs.button = 1
         self.ins1prev, self.ins2prev = ins1, ins2
         self.butstateprev = butstate
+
+
+class ThreadWiFi(Thread):
+
+    def __init__(self, globs):
+        Thread.__init__(self, target=self.wifi)
+        self.daemon = True
+        self.globs = globs
+        self.start()
+
+    def wifi(self):
+        s = socket.socket()
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(('', 11111))
+        s.listen()
+        while True:
+            conn, addr = s.accept()
+            print(addr)
+            while conn:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                cfl = False
+                msgl = ''
+                for c in data.decode():
+                    if cfl:
+                        if c == '>':
+                            self.globs.encoder = int(msgl)
+                            if self.globs.encoder == 2:
+                                self.globs.encoder = 0
+                                self.globs.button = 1
+                            cfl = False
+                            msgl = ''
+                        else:
+                            msgl = msgl + c
+                    if c == '<':
+                        cfl = True
