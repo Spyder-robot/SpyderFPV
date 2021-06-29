@@ -3,6 +3,9 @@ from threading import Thread
 import socket
 import serial
 import time
+from smbus2 import SMBus
+import ST7789
+from PIL import Image, ImageDraw, ImageFont
 
 
 class Globals:
@@ -14,6 +17,9 @@ class Globals:
     temp1 = 0
     temp2 = 0
     uartin = 0
+    wificonn = None
+    statustxt = ""
+    execute = 0
 
 
 class Encoder:
@@ -72,27 +78,26 @@ class ThreadWiFi(Thread):
         s.bind(('', 11111))
         s.listen()
         while True:
-            conn, addr = s.accept()
+            self.globs.wificonn, addr = s.accept()
             print(addr)
-            while conn:
-                data = conn.recv(1024)
-                if not data:
-                    break
-                cfl = False
-                msgl = ''
-                for c in data.decode():
-                    if cfl:
-                        if c == '>':
-                            self.globs.encoder = int(msgl)
-                            if self.globs.encoder == 2:
-                                self.globs.encoder = 0
-                                self.globs.button = 1
-                            cfl = False
-                            msgl = ''
-                        else:
-                            msgl = msgl + c
-                    if c == '<':
-                        cfl = True
+            while self.globs.wificonn:
+                data = self.globs.wificonn.recv(1024)
+                if data is not None:
+                    cfl = False
+                    msgl = ''
+                    for c in data.decode():
+                        if cfl:
+                            if c == '>':
+                                self.globs.encoder = int(msgl)
+                                if self.globs.encoder == 2:
+                                    self.globs.encoder = 0
+                                    self.globs.button = 1
+                                cfl = False
+                                msgl = ''
+                            else:
+                                msgl = msgl + c
+                        if c == '<':
+                            cfl = True
 
 
 class ThreadSerial(Thread):
@@ -119,3 +124,153 @@ class ThreadSerial(Thread):
                     self.globs.temp1 = int(float(va[4:va.find(">")]))
                 if va[:4] == "<T2=":
                     self.globs.temp2 = int(float(va[4:va.find(">")]))
+
+
+class I2C:
+
+    def __init__(self):
+        self.bus = SMBus(1)
+
+    def read(self, adr, reg, bts):
+        try:
+            res = self.bus.read_i2c_block_data(adr, reg, bts)
+        except OSError:
+            res = [-1]
+        return res
+
+
+class Display:
+
+    def __init__(self, globs):
+        self.disp = ST7789.ST7789(port=0, cs=0, rst=23, dc=24, backlight=25, spi_speed_hz=80 * 1000 * 1000)
+        self.img = Image.new('RGB', (240, 240), color=(0, 0, 0))
+        self.draw = ImageDraw.Draw(self.img)
+        self.fontmenu = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+        self.fontstatus = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
+        self.fonticon = ImageFont.truetype("/usr/share/fonts/truetype/font-awesome/fontawesome-webfont.ttf", 30)
+        self.draw.text((120, 120), "SPYDER", font=self.fontmenu, fill=(255, 255, 255), anchor="mm")
+        self.disp.display(self.img)
+        self.globs = globs
+
+    def drawicon(self):
+        self.draw.rectangle([0, 0, 240, 35], (0, 0, 0))
+        if self.globs.wificonn is not None:
+            col = (0, 255, 0)
+        else:
+            col = (128, 128, 128)
+        self.draw.text((30, 17), chr(0xf1eb), font=self.fonticon, fill=col, anchor="mm")
+        if self.globs.volts > 11:
+            col = (0, 255, 0)
+        elif self.globs.volts > 10:
+            col = (255, 255, 0)
+        else:
+            col = (255, 0, 0)
+        if self.globs.volts == 0:
+            col = (128, 128, 128)
+        self.draw.text((210, 17), chr(0xf1e6), font=self.fonticon, fill=col, anchor="mm")
+        msgl = "<C=1><V=" + str(self.globs.volts) + ">"
+        self.wifisend(msgl)
+
+    def drawstatus(self):
+        self.draw.rectangle([0, 210, 240, 240], (0, 0, 0))
+        self.draw.text((120, 210 + 15), self.globs.statustxt, font=self.fontstatus, fill=(255, 255, 255), anchor="mm")
+        msgl = "<S=" + self.globs.statustxt + ">"
+        self.wifisend(msgl)
+
+    def drawlist(self, lst, mode):  # 1 - Menu, 2 - Exec, 3 - List
+        self.draw.rectangle([0, 35, 240, 210], (0, 0, 0))
+        msgl = ''
+        for ii in range(5):
+            showtext = lst[ii]
+            if mode == 1:
+                msgl = msgl + "<M" + str(ii) + "=" + lst[ii] + ">"
+                if lst[ii].rfind('#') != -1:
+                    showtext = lst[ii].replace('#', '')
+                    col = (0, 255, 0)
+                else:
+                    col = (255, 255, 0)
+            else:
+                if mode == 2:
+                    msgl = msgl + "<E" + str(ii) + "=" + lst[ii] + ">"
+                else:
+                    msgl = msgl + "<S" + str(ii) + "=" + lst[ii] + ">"
+                if ii == 0:
+                    col = (255, 255, 255)
+                elif ii == 4:
+                    col = (0, 255, 0)
+                else:
+                    col = (255, 255, 0)
+            self.draw.text((120, 35 + ii * 35 + 17), showtext, font=self.fontmenu, fill=col, anchor="mm")
+        if mode == 3:
+            self.draw.rectangle([50, 103, 190, 139], outline=(255, 255, 255), width=5)
+        self.wifisend(msgl)
+
+    def show(self, lst, mode):
+        self.drawicon()
+        self.drawlist(lst, mode)
+        self.drawstatus()
+        self.disp.display(self.img)
+
+    def wifisend(self, msgl):
+        if self.globs.wificonn is not None:
+            try:
+                self.globs.wificonn.send(msgl.encode())
+            except:
+                self.globs.wificonn = None
+
+
+class Menu:
+
+    def __init__(self, fields, globs):
+        self._fields = fields
+        self.curpos = 1
+        self.globs = globs
+
+    def incpos(self):
+        if self._fields.get(self.curpos + 1) is not None:
+            self.curpos = self.curpos + 1
+
+    def decpos(self):
+        if self._fields.get(self.curpos - 1) is not None:
+            self.curpos = self.curpos - 1
+
+    def press(self):
+        if self._fields.get(self.curpos) == 'Back':
+            self.curpos = int(self.curpos / 10)
+            return
+        if self._fields.get(self.curpos * 10) is None:
+            self.globs.execute = self.curpos
+        else:
+            self.curpos = self.curpos * 10
+
+    def getcur(self):
+        return self._fields.get(self.curpos)
+
+    def list(self):
+        out = []
+        submenu = {}
+        minkey = 999
+        for key in self._fields:
+            if int(key / 10) == int(self.curpos / 10):
+                submenu[key] = self._fields[key]
+                if key < minkey:
+                    minkey = key
+        strt = 0
+        if self.curpos > minkey + 2:
+            strt = self.curpos - minkey - 2
+        if self.curpos - minkey > len(submenu) - 3:
+            strt = len(submenu) - 5
+        if len(submenu) < 6:
+            strt = 0
+        for ii in range(5):
+            pref = ''
+            if strt + minkey + ii == self.curpos:
+                pref = '#'
+            opt = self._fields.get(strt + minkey + ii)
+            if opt is None:
+                opt = ''
+            out.append(pref + opt)
+        return out
+
+    def fldget(self, ind):
+        return self._fields.get(ind)
