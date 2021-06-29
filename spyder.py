@@ -1,12 +1,19 @@
 import RPi.GPIO as GPIO
 from threading import Thread
 import socket
+import serial
+import time
 
 
 class Globals:
 
     encoder = 0
     button = 0
+    amps = 0
+    volts = 0
+    temp1 = 0
+    temp2 = 0
+    uartin = 0
 
 
 class Encoder:
@@ -86,3 +93,29 @@ class ThreadWiFi(Thread):
                             msgl = msgl + c
                     if c == '<':
                         cfl = True
+
+
+class ThreadSerial(Thread):
+
+    def __init__(self, port, baud, globs):
+        self.ser = serial.Serial(port, baud)
+        Thread.__init__(self, target=self.serread, args=(self.ser,))
+        self.daemon = True
+        self.globs = globs
+        self.start()
+
+    def serread(self, serl):
+        while True:
+            time.sleep(0.1)
+            while serl.in_waiting > 0:
+                self.globs.uartin = 1
+                resp = serl.readline()
+                va = resp.decode("utf-8", errors="ignore")[:-2]
+                if va[:3] == "<V=":
+                    self.globs.volts = float(va[3:va.find(">")])
+                if va[:3] == "<I=":
+                    self.globs.amps = float(va[3:va.find(">")])
+                if va[:4] == "<T1=":
+                    self.globs.temp1 = int(float(va[4:va.find(">")]))
+                if va[:4] == "<T2=":
+                    self.globs.temp2 = int(float(va[4:va.find(">")]))
