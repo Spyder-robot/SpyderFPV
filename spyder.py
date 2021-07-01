@@ -1,5 +1,6 @@
+import traceback
 import RPi.GPIO as GPIO
-from threading import Thread
+from threading import Thread,Condition
 import socket
 import serial
 import time
@@ -177,7 +178,7 @@ class Display:
         msgl = "<S=" + self.globs.statustxt + ">"
         self.wifisend(msgl)
 
-    def drawlist(self, lst, mode):  # 1 - Menu, 2 - Exec, 3 - List
+    def drawlist(self, lst, mode):  # 1 - Menu, 2 - Exec, 3 - List, 4 - Bye
         self.draw.rectangle([0, 35, 240, 210], (0, 0, 0))
         msgl = ''
         for ii in range(5):
@@ -206,10 +207,15 @@ class Display:
         self.wifisend(msgl)
 
     def show(self, lst, mode):
-        self.drawicon()
-        self.drawlist(lst, mode)
-        self.drawstatus()
-        self.disp.display(self.img)
+        if mode == 4:
+            self.img = Image.new('RGB', (240, 240), color=(0, 0, 0))
+            self.disp.display(self.img)
+            self.disp.set_backlight(0)
+        else:
+            self.drawicon()
+            self.drawlist(lst, mode)
+            self.drawstatus()
+            self.disp.display(self.img)
 
     def wifisend(self, msgl):
         if self.globs.wificonn is not None:
