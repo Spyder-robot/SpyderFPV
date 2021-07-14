@@ -4,25 +4,32 @@ import traceback
 import os
 import sys
 import RPi.GPIO as GPIO
-from spyder import Globals, Encoder, ThreadWiFi, ThreadSerial, I2C, Display, Menu
+from spyder import Globals, Encoder, ThreadWiFi, ThreadSerial, I2C, Display, Menu, ThreadCamera
+from flask import Flask, render_template, Response, request
+import threading
+
 
 menu = {1: "System",
         2: "Kinematics",
-        3: "FPV walk",
-        4: "Quit",
+        3: "Manual",
+        4: "FPV walk",
+        5: "Quit",
         10: "A1 Flash",
         11: "A1 Reset",
         12: "A2 Flash",
         13: "A2 Reset",
         14: "Sensors",
-        15: "Camera",
-        16: "Test",
-        17: "Back",
+        15: "Test",
+        16: "Back",
         20: "Limits",
         21: "Poses",
         22: "Tuning",
         23: "Gaits",
         24: "Back",
+        30: "CAM On/Off",
+        31: "LED On/Off",
+        32: "FAN On/Off",
+        33: "Back",
         210: "Zero",
         211: "Walk",
         212: "Park",
@@ -93,9 +100,17 @@ def testmenu():
         time.sleep(1)
 
 
+def manual(item):
+    if item == 31:
+        i2c.read(0x11, 3, 1)
+    if item == 32:
+        i2c.read(0x11, 4, 1)
+
+
 if __name__ == '__main__':
     g = Globals()
     encoder = Encoder(16, 20, 12, g)
+    ThreadCamera(g)
     ThreadWiFi(g)
     ThreadSerial("/dev/serial0", 9600, g)
     i2c = I2C()
@@ -119,8 +134,10 @@ if __name__ == '__main__':
                         running = False
                     elif g.execute <= 15:
                         systemmenu(g.execute)
-                    elif g.execute == 16:
+                    elif g.execute == 15:
                         testmenu()
+                    elif g.execute > 30:
+                        manual(g.execute)
                     g.execute = 0
                 g.encoder = 0
                 g.button = 0
