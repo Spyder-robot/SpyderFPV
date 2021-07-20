@@ -7,6 +7,7 @@ import RPi.GPIO as GPIO
 from spyder import Globals, Encoder, ThreadWiFi, ThreadSerial, I2C, Display, Menu, ThreadCamera
 from flask import Flask, render_template, Response, request
 import threading
+import pygame as pg
 
 
 menu = {1: "System",
@@ -26,10 +27,9 @@ menu = {1: "System",
         22: "Tuning",
         23: "Gaits",
         24: "Back",
-        30: "CAM On/Off",
-        31: "LED On/Off",
-        32: "FAN On/Off",
-        33: "Back",
+        30: "LED On/Off",
+        31: "FAN On/Off",
+        32: "Back",
         210: "Zero",
         211: "Walk",
         212: "Park",
@@ -80,35 +80,84 @@ def systemmenu(item):
 
 def testmenu():
     dsp = ''
-    if i2c.read(0x11, 8, 1)[0] == 1:
+    if i2c.read(0x11, 2, 1)[0] == 1:
         cycle = True
+        scnt = False
         while cycle:
             fb = i2c.read(0x11, 1, 1)[0]
+            # print(fb)
             if fb == 1:
-                dsp = "Rainbow"
+                dsp = "LED"
             elif fb == 2:
-                dsp = "Main colors"
+                dsp = "RGB"
             elif fb == 3:
-                dsp = "Police"
+                dsp = "FAN"
+            elif fb == 4:
+                dsp = "Servos cnt"
+            elif fb > 4:
+                scnt = True
             elif fb == 0:
                 dsp = "End"
                 cycle = False
-            display.show(['Test', 'RGB LED', str(fb), dsp, ''], 2)
+            if scnt:
+                display.show(['Test', 'Servos', "found", str(fb), ''], 2)
+            else:
+                display.show(['Test', 'Running', dsp, str(fb), ''], 2)
             time.sleep(.1)
     else:
-        display.show([mainmenu.fldget(item), '', 'ERROR', '', ''], 2)
+        display.show(['Test', '', 'ERROR', '', ''], 2)
         time.sleep(1)
+
+    timer = time.time()
+    while timer + 3 > time.time():
+        display.show(['Test', 'Running', 'Ultrasonic', str(i2c.read(0x22, 1, 1)[0]), ''], 2)
+
+    i2c.read(0x22, 2, 1)
+    timer = time.time()
+    while timer + 3 > time.time():
+        dat = i2c.read(0x22, 3, 2)
+        if dat[0] != -1:
+            display.show(['Test', 'Running', 'Lidar', str(dat[0]*256+dat[1]), ''], 2)
+        else:
+            display.show(['Test', '', 'ERROR', '', ''], 2)
+    i2c.read(0x22, 4, 1)
+
+    timer = time.time()
+    while timer + 3 > time.time():
+        mpu = i2c.read(0x68, 0x3b, 6)
+        display.show(['Test',
+                      'IMU X = ' + str((mpu[0] << 8) | mpu[1]),
+                      'IMU Y = ' + str((mpu[2] << 8) | mpu[3]),
+                      'IMU Z = ' + str((mpu[4] << 8) | mpu[5]),
+                      ''], 2)
+
+    try:
+        pg.mixer.music.load("march.mp3")
+        display.show(['Test', 'Running', 'Player', '', ''], 2)
+    except pygame.error:
+        display.show(['Test', '', 'ERROR', '', ''], 2)
+    pg.mixer.music.set_volume(1)
+    pg.mixer.music.play()
+    time.sleep(3)
+    pg.mixer.music.stop()
 
 
 def manual(item):
-    if item == 31:
+    if item == 30:
         i2c.read(0x11, 3, 1)
-    if item == 32:
+    if item == 31:
         i2c.read(0x11, 4, 1)
 
 
 if __name__ == '__main__':
     g = Globals()
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(22, GPIO.OUT)
+    GPIO.output(22, 1)
+    GPIO.setup(26, GPIO.OUT)
+    GPIO.output(26, 1)
+    pg.mixer.init(44100, -16, 1, 2048)
     encoder = Encoder(16, 20, 12, g)
     ThreadCamera(g)
     ThreadWiFi(g)
@@ -130,13 +179,13 @@ if __name__ == '__main__':
                     mainmenu.press()
                 if g.execute != 0:
                     g.button = 0
-                    if g.execute == 4:
+                    if g.execute == 5:
                         running = False
-                    elif g.execute <= 15:
+                    elif g.execute < 15:
                         systemmenu(g.execute)
                     elif g.execute == 15:
                         testmenu()
-                    elif g.execute > 30:
+                    elif g.execute >= 30:
                         manual(g.execute)
                     g.execute = 0
                 g.encoder = 0

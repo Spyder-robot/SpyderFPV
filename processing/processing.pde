@@ -102,8 +102,8 @@ void draw()
     if(cam.isAvailable()) 
       cam.read();
     img=cam;  
-    img.resize(730, 410);  
-    image(img, 280, 20, 730, 410);
+    img.resize(736, 416);  
+    image(img, 280, 20, 736, 416);
   }
   catch (Exception e) 
   {
@@ -134,7 +134,7 @@ void listenwifi()
   if (state==2 && rpi_cl.available()>0)
   {
     msg = rpi_cl.readString();
-    println(msg);
+
     if (msg.indexOf("<C=")!=-1)
     {
       smsg = msg.substring(msg.indexOf("<C="));
@@ -336,7 +336,7 @@ public void camera(boolean Value)
   if(Value)
   {
     surface.setSize(1030,450);
-    cam = new IPCapture(this, "http://192.168.0.106:8000/stream.mjpg", "", "");
+    cam = new IPCapture(this, "http://192.168.0.114:5000/video_feed", "", "");
     cam.start();
     println(cam);
   }

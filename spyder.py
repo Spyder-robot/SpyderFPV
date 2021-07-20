@@ -123,6 +123,7 @@ class ThreadSerial(Thread):
                 self.globs.uartin = 1
                 resp = serl.readline()
                 va = resp.decode("utf-8", errors="ignore")[:-2]
+                # print(va)
                 if va[:3] == "<V=":
                     self.globs.volts = float(va[3:va.find(">")])
                 if va[:3] == "<I=":

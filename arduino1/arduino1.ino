@@ -127,8 +127,8 @@ void loop()
 void recvData(int bts) 
 {
   adr = Wire.read();
-  while (Wire.available())
-    Wire.read();
+//  while (Wire.available())
+//    Wire.read();
 }
 
 void sendData() 
@@ -174,92 +174,58 @@ void ledf()
 
 void testf() 
 {
-  int i, j;
+  int i, j, cnt=0;
 
-  for(i=0; i<32;i++)
-    neostrip.setPixelColor(i, neostrip.gamma32(neostrip.ColorHSV(i * 65536L / 12)));
-  neostrip.show();
-  delay(2000);
-
-  st=2;
-  softSerial.println();
-  neostrip.fill(neostrip.Color(255,0,0));
-  neostrip.show();
-  delay(1000);
-  neostrip.fill(neostrip.Color(0, 255,0));
-  neostrip.show();
-  delay(1000);
-  neostrip.fill(neostrip.Color(0,0,255));
-  neostrip.show();
-  delay(1000);
-
-  st=3;
-  softSerial.println();
-  for (i = 0; i < 5; i++)
-  {
-    for (j = 0; j < 3; j++)
-    {
-      neostrip.fill(neostrip.Color(0, 0, 255), 0, 16);
-      neostrip.show();
-      delay(100);
-      neostrip.fill(0);
-      neostrip.show();
-      delay(50);
-    }
-    delay(100);
-    for (j = 0; j < 3; j++)
-    {
-      neostrip.fill(neostrip.Color(255, 0, 0), 16, 16);
-      neostrip.show();
-      delay(100);
-      neostrip.fill(0);
-      neostrip.show();
-      delay(50);
-    }
-    delay(100);
-  }
-  neostrip.fill(0);
-  neostrip.show();
-
-  int cnt=0;
-
-  
-  for (i = 0; i < 254; i++)
-  {
-    if (Dynamixel.ping(i) != (-1))
-      cnt++;
-
-      st = cnt;
-  }
-
-
-  for(i=1; i<255; i++)
-  {
-    analogWrite(FAN_PIN, i);
-    st=i;
-    delay(10);
-  }
-  
-  for(i=255; i>=0; i--)
-  {
-    analogWrite(FAN_PIN, i);
-    st=i;
-    delay(10);
-  }
-
-    for(i=1; i<255; i++)
+  for(i=0; i<255; i++)
   {
     analogWrite(LED_PIN, i);
-    st=i;
     delay(10);
   }
   
   for(int i=255; i>=0; i--)
   {
     analogWrite(LED_PIN, i);
-    st=i;
     delay(10);
   }
+
+
+  st++; 
+
+  for(j=0; j<32; j++)
+  {
+    for(i=0; i<32; i++)
+      neostrip.setPixelColor(i, neostrip.gamma32(neostrip.ColorHSV((i+j>31?i+j-32:i+j) * 65536L / 12)));
+    neostrip.show();
+    delay(100);
+  }
+  neostrip.fill(0);
+  neostrip.show();
+  
+  st++;
+  softSerial.println();  // ???????????
+
+  for(i=0; i<255; i++)
+  {
+    analogWrite(FAN_PIN, i);
+    delay(10);
+  }
+  
+  for(i=255; i>=0; i--)
+  {
+    analogWrite(FAN_PIN, i);
+    delay(10);
+  }
+
+  st++;
+
+  for (i = 0; i < 254; i++)
+  {
+    if (Dynamixel.ping(i) != (-1))
+      cnt++;
+  }
+  st = ((cnt==0)?99:cnt);
+  softSerial.println();  // ???????????
+  delay(3000);
 }
 
 
